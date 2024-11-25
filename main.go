@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -11,6 +12,8 @@ import (
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 )
+
+var authorMap = make(map[string]net.Conn)
 
 func main() {
 	addr := "localhost:7924"
@@ -38,13 +41,15 @@ func main() {
 		// 	)
 		// },
 		OnHeader: func(key, value []byte) error {
+			// fmt.Printf("header key=%v value=%v\n", string(key), string(value))
 			if string(key) != "Cookie" {
+				// fmt.Println("skipping because key not cookie")
 				return nil
 			}
 			// todo check for authentication
 			ok := httphead.ScanCookie(value, func(key, value []byte) bool {
 				fmt.Println(string(key), string(value))
-				return true
+				return checkAuth(value)
 			})
 			if ok {
 				return nil
@@ -77,8 +82,9 @@ func main() {
 			fmt.Println("new connection: ", conn.RemoteAddr())
 			for {
 				msg, op, err := wsutil.ReadClientData(conn)
-				if op == ws.OpClose {
-					fmt.Println("recieved close op code")
+				var closedError wsutil.ClosedError
+				if errors.As(err, &closedError){
+					fmt.Printf("%v broke connection", conn.RemoteAddr())
 					break
 				}
 				if err != nil {
