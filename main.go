@@ -15,16 +15,16 @@ import (
 )
 
 type NotificationRequest struct {
-	Users       []string `json:"users,omitempty"`
+	User       string `json:"user,omitempty"`
 	Title       string   `json:"title,omitempty"`
 	Description string   `json:"description,omitempty"`
 }
 
-var notificationRequestSchema = z.Struct(z.Schema{
-	"users":       z.Slice(z.String()).Required(z.Message("users array is required")).Min(1, z.Message("atleast one user is required")),
+var notificationRequestSchema = z.Slice(z.Struct(z.Schema{
+	"users":       z.String().Required(z.Message("users array is required")).Min(1, z.Message("user cannot be empty")),
 	"title":       z.String().Required(z.Message("title is required")).Min(1, z.Message("title cannot be empty")),
 	"description": z.String().Required(z.Message("description is required")).Min(1, z.Message("description cannot be empty")),
-})
+}))
 
 var authorConnMap = make(map[string]net.Conn)
 
@@ -77,7 +77,7 @@ func main() {
 		// }()
 	})
 
-	router.HandleFunc("POST /trigger", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("POST /send", func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		splittedAuth := strings.Split(auth, " ")
 		if len(splittedAuth) != 2 {
@@ -103,7 +103,7 @@ func main() {
 			return
 		}
 
-		var notifReq NotificationRequest
+		notifReqs := []NotificationRequest{}
 		var reqMap map[string]any
 		err = json.Unmarshal(reqBody, &reqMap)
 		if err != nil {
@@ -113,7 +113,7 @@ func main() {
 			return
 		}
 
-		errors := notificationRequestSchema.Parse(reqMap, &notifReq)
+		errors := notificationRequestSchema.Parse(reqMap, &notifReqs)
 		if errors != nil {
 			firstError := errors["$first"]
 			w.WriteHeader(http.StatusBadRequest)
@@ -126,16 +126,16 @@ func main() {
 		w.Write([]byte("notification request accepted"))
 
 		// todo send to a worker pool
-		for _, user := range notifReq.Users {
-			go func(user string) {
-				userConn, ok := authorConnMap[user]
+		for _, notif := range notifReqs {
+			go func(notif NotificationRequest) {
+				userConn, ok := authorConnMap[notif.User]
 				if !ok {
 					return
 				}
 
 				message, err := json.Marshal(map[string]string{
-					"title":       notifReq.Title,
-					"description": notifReq.Description,
+					"title":       notif.Title,
+					"description": notif.Description,
 				})
 				if err != nil {
 					log.Panic("unable to jsonify")
@@ -144,7 +144,7 @@ func main() {
 				if err != nil {
 					log.Println("error sending message to client:", err)
 				}
-			}(user)
+			}(notif)
 		}
 	})
 
