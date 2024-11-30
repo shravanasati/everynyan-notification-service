@@ -31,7 +31,7 @@ var authorConnMap = make(map[string]net.Conn)
 func main() {
 	addr := "localhost:7924"
 	router := http.NewServeMux()
-	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/subscribe", func(w http.ResponseWriter, r *http.Request) {
 		sessionCookie, err := r.Cookie("session")
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
