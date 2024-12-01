@@ -17,3 +17,4 @@ bin/
 
 .env
 serviceAccountKey.json
+everynyan-notification-service

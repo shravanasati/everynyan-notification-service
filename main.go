@@ -15,15 +15,17 @@ import (
 )
 
 type NotificationRequest struct {
-	User       string `json:"user,omitempty"`
-	Title       string   `json:"title,omitempty"`
-	Description string   `json:"description,omitempty"`
+	User        string `json:"user,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Link        string `json:"link,omitempty"`
 }
 
 var notificationRequestSchema = z.Slice(z.Struct(z.Schema{
 	"users":       z.String().Required(z.Message("users array is required")).Min(1, z.Message("user cannot be empty")),
 	"title":       z.String().Required(z.Message("title is required")).Min(1, z.Message("title cannot be empty")),
 	"description": z.String().Required(z.Message("description is required")).Min(1, z.Message("description cannot be empty")),
+	"link":        z.String().Required(z.Message("link is required")).Min(1, z.Message("link cannot be empty")),
 }))
 
 var authorConnMap = make(map[string]net.Conn)
@@ -136,6 +138,7 @@ func main() {
 				message, err := json.Marshal(map[string]string{
 					"title":       notif.Title,
 					"description": notif.Description,
+					"link":        notif.Link,
 				})
 				if err != nil {
 					log.Panic("unable to jsonify")
