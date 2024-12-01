@@ -50,7 +50,7 @@ func main() {
 
 		conn, _, _, err := ws.UpgradeHTTP(r, w)
 		if err != nil {
-			log.Println("unable to upgrade the http connection to websocket")
+			log.Println("unable to upgrade the http connection to websocket", err)
 			// w.WriteHeader(http.StatusInternalServerError)
 			// w.Write([]byte("unable to upgrade the http connection to websocket"))
 			return
