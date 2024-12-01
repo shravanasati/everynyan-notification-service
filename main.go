@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -60,24 +61,31 @@ func main() {
 		authorConnMap[token] = conn
 		wsutil.WriteServerText(conn, []byte("notification subscription successfull"))
 		// fmt.Println(authorConnMap)
-		// go func() {
-		// 	defer conn.Close()
+		go func() {
+			defer func (conn net.Conn, author string)  {
+				conn.Close()
+				delete(authorConnMap, author)
+			} (conn, token)
 
-		// 	for {
-		// 		msg, op, err := wsutil.ReadClientData(conn)
-		// 		var closedError wsutil.ClosedError
-		// 		if errors.As(err, &closedError) {
-		// 			fmt.Printf("%v broke connection", conn.RemoteAddr())
-		// 			break
-		// 		}
-		// 		if err != nil {
-		// 			fmt.Println("error in reading client data:", err)
-		// 			break
-		// 		}
-		// 		fmt.Println(op, string(msg))
-		// 		wsutil.WriteServerMessage(conn, op, msg)
-		// 	}
-		// }()
+			for {
+				msg, op, err := wsutil.ReadClientData(conn)
+				var closedError wsutil.ClosedError
+				if errors.As(err, &closedError) {
+					fmt.Printf("%v broke connection", conn.RemoteAddr())
+					break
+				}
+				if err != nil {
+					fmt.Println("error in reading client data:", err)
+					break
+				}
+				// handle ping-pong
+				if string(msg) == "__ping__"{
+					wsutil.WriteServerMessage(conn, op, []byte("__pong__"))
+				}
+				// fmt.Println(op, string(msg))
+				// wsutil.WriteServerMessage(conn, op, msg)
+			}
+		}()
 	})
 
 	router.HandleFunc("POST /send", func(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +126,7 @@ func main() {
 
 		errors := notificationRequestSchema.Parse(reqMap, &notifReqs)
 		if errors != nil {
+			log.Println("zog validation failed")
 			firstError := errors["$first"]
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(firstError[0].Message()))
