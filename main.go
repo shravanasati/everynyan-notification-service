@@ -51,14 +51,15 @@ func main() {
 		conn, _, _, err := ws.UpgradeHTTP(r, w)
 		if err != nil {
 			log.Println("unable to upgrade the http connection to websocket")
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("unable to upgrade the http connection to websocket"))
+			// w.WriteHeader(http.StatusInternalServerError)
+			// w.Write([]byte("unable to upgrade the http connection to websocket"))
 			return
 		}
 
 		fmt.Println("new connection: ", conn.RemoteAddr())
 		authorConnMap[token] = conn
-		fmt.Println(authorConnMap)
+		wsutil.WriteServerText(conn, []byte("notification subscription successfull"))
+		// fmt.Println(authorConnMap)
 		// go func() {
 		// 	defer conn.Close()
 
