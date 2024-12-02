@@ -115,7 +115,7 @@ func main() {
 		}
 
 		notifReqs := []NotificationRequest{}
-		var reqMap map[string]any
+		reqMap := []map[string]any{}
 		err = json.Unmarshal(reqBody, &reqMap)
 		if err != nil {
 			log.Println("unable to unmarshal request body:", err)
