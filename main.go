@@ -23,7 +23,7 @@ type NotificationRequest struct {
 }
 
 var notificationRequestSchema = z.Slice(z.Struct(z.Schema{
-	"users":       z.String().Required(z.Message("users array is required")).Min(1, z.Message("user cannot be empty")),
+	"user":       z.String().Required(z.Message("users array is required")).Min(1, z.Message("user cannot be empty")),
 	"title":       z.String().Required(z.Message("title is required")).Min(1, z.Message("title cannot be empty")),
 	"description": z.String().Required(z.Message("description is required")).Min(1, z.Message("description cannot be empty")),
 	"link":        z.String().Required(z.Message("link is required")).Min(1, z.Message("link cannot be empty")),
@@ -62,16 +62,16 @@ func main() {
 		wsutil.WriteServerText(conn, []byte("notification subscription successfull"))
 		// fmt.Println(authorConnMap)
 		go func() {
-			defer func (conn net.Conn, author string)  {
+			defer func(conn net.Conn, author string) {
 				conn.Close()
 				delete(authorConnMap, author)
-			} (conn, token)
+			}(conn, token)
 
 			for {
 				msg, op, err := wsutil.ReadClientData(conn)
 				var closedError wsutil.ClosedError
 				if errors.As(err, &closedError) {
-					fmt.Printf("%v broke connection", conn.RemoteAddr())
+					fmt.Printf("%v broke connection \n", conn.RemoteAddr())
 					break
 				}
 				if err != nil {
@@ -79,7 +79,7 @@ func main() {
 					break
 				}
 				// handle ping-pong
-				if string(msg) == "__ping__"{
+				if string(msg) == "__ping__" {
 					wsutil.WriteServerMessage(conn, op, []byte("__pong__"))
 				}
 				// fmt.Println(op, string(msg))
