@@ -96,55 +96,62 @@ func decrypt(encryptedText string) ([]byte, error) {
 }
 
 type SessionCookie struct {
-	Token string `json:"token"`
-	Role  string `json:"role"`
+	Token  string `json:"token"`
+	UserID string `json:"userID"`
+	Role   string `json:"role"`
 }
 
-func getToken(token string) (string, error) {
+func getToken(token string) (SessionCookie, error) {
 	snap, err := firestoreClient.
 		Collection("tokens").
 		Doc(token).
 		Get(context.Background())
 
 	if err != nil {
-		return "", err
+		return SessionCookie{}, err
 	}
 
 	if !snap.Exists() {
-		return "", fmt.Errorf("token doesnt exist")
+		return SessionCookie{}, fmt.Errorf("token doesnt exist")
 	}
 
-	return snap.Data()["token"].(string), nil
+	data := snap.Data()
+	return SessionCookie{
+		Token:  data["token"].(string),
+		UserID: data["userID"].(string),
+		Role:   data["role"].(string),
+	}, nil
 }
 
 // checkAuth accepts the cookieValue and tries to authenticate the request.
 // if successfull, it returns true and the token value.
-func checkAuth(cookieValue []byte) (bool, string) {
+func checkAuth(cookieValue []byte) (bool, SessionCookie) {
+	var emptyCookie SessionCookie
 	decryptedCookie, err := decrypt(string(cookieValue))
 	if err != nil {
 		fmt.Println("unable to decrypt cookie: ", err)
-		return false, ""
+		return false, emptyCookie
 	}
 
 	var sessionCookie SessionCookie
 	err = json.Unmarshal([]byte(decryptedCookie), &sessionCookie)
 	if err != nil {
 		fmt.Println("unable to decode cookie into struct", err)
-		return false, ""
+		return false, emptyCookie
 	}
 
 	if sessionCookie.Token == "" {
 		fmt.Println("session cookie token empty")
-		return false, ""
+		return false, emptyCookie
 	}
 
 	dbToken, err := getToken(sessionCookie.Token)
 	if err != nil {
 		fmt.Println("error getting token from db", err)
-		return false, ""
+		return false, emptyCookie
 	}
-	if dbToken != sessionCookie.Token {
-		return false, ""
+	if dbToken.Token != sessionCookie.Token {
+		return false, emptyCookie
 	}
 
 	return true, dbToken

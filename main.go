@@ -29,7 +29,7 @@ var notificationRequestSchema = z.Slice(z.Struct(z.Schema{
 	"link":        z.String().Required(z.Message("link is required")).Min(1, z.Message("link cannot be empty")),
 }))
 
-var authorConnMap = make(map[string]net.Conn)
+var authorConnMap = make(map[string][]net.Conn)
 
 func main() {
 	addr := "localhost:7924"
@@ -58,14 +58,14 @@ func main() {
 		}
 
 		fmt.Println("new connection: ", conn.RemoteAddr())
-		authorConnMap[token] = conn
+		authorConnMap[token.UserID] = append(authorConnMap[token.UserID], conn)
 		wsutil.WriteServerText(conn, []byte("notification subscription successfull"))
 		// fmt.Println(authorConnMap)
 		go func() {
 			defer func(conn net.Conn, author string) {
 				conn.Close()
 				delete(authorConnMap, author)
-			}(conn, token)
+			}(conn, token.UserID)
 
 			for {
 				msg, op, err := wsutil.ReadClientData(conn)
@@ -140,7 +140,7 @@ func main() {
 		// todo send to a worker pool
 		for _, notif := range notifReqs {
 			go func(notif NotificationRequest) {
-				userConn, ok := authorConnMap[notif.User]
+				userConns, ok := authorConnMap[notif.User]
 				if !ok {
 					return
 				}
@@ -153,9 +153,11 @@ func main() {
 				if err != nil {
 					log.Panic("unable to jsonify")
 				}
-				err = wsutil.WriteServerText(userConn, message)
-				if err != nil {
-					log.Println("error sending message to client:", err)
+				for _, tokenConn := range userConns {
+					err = wsutil.WriteServerText(tokenConn, message)
+					if err != nil {
+						log.Println("error sending message to client:", err)
+					}
 				}
 			}(notif)
 		}
