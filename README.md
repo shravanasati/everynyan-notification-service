@@ -25,6 +25,8 @@ The `API_KEY` field corresponds to the `NOTIFICATIONS_API_KEY` env var for the n
 
 VAPID credentials can be obtained by running `go build`. The server will panic that these env vars are not set and print a set of them, the VAPID private and public key **in order (private first, public second)**.
 
+`VAPID_PUBLIC_KEY` corresponds to the `NEXT_PUBLIC_VAPID_PUBLIC_KEY` for the nextjs website.
+
 Set those and then run the server again.
 
 ```
