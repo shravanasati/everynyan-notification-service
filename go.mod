@@ -6,6 +6,8 @@ require (
 	cloud.google.com/go/firestore v1.15.0
 	firebase.google.com/go/v4 v4.15.0
 	github.com/Oudwins/zog v0.13.0
+	github.com/SherClockHolmes/webpush-go v1.3.0
+	github.com/boltdb/bolt v1.3.1
 	github.com/gobwas/ws v1.4.0
 	github.com/joho/godotenv v1.5.1
 	golang.org/x/crypto v0.30.0
@@ -20,8 +22,6 @@ require (
 	cloud.google.com/go/longrunning v0.5.5 // indirect
 	cloud.google.com/go/storage v1.40.0 // indirect
 	github.com/MicahParks/keyfunc v1.9.0 // indirect
-	github.com/SherClockHolmes/webpush-go v1.3.0 // indirect
-	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

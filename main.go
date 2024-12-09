@@ -6,141 +6,45 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"maps"
 	"net"
 	"net/http"
-	"slices"
-	"strings"
-	"sync"
 
-	z "github.com/Oudwins/zog"
+	"github.com/Oudwins/zog"
 	"github.com/SherClockHolmes/webpush-go"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 )
 
-type NotificationRequest struct {
-	User        string `json:"user,omitempty"`
-	Title       string `json:"title,omitempty"`
-	Description string `json:"description,omitempty"`
-	Link        string `json:"link,omitempty"`
-}
+var errNoRequestBody = errors.New("missing request body")
+var errInvalidJSON = errors.New("missing/invalid json in request body")
 
-type BroadcastRequest struct {
-	Title       string `json:"title,omitempty"`
-	Description string `json:"description,omitempty"`
-	Link        string `json:"link,omitempty"`
-}
-
-func (notif NotificationRequest) TransmissionJSON() []byte {
-	message, err := json.Marshal(map[string]string{
-		"title":       notif.Title,
-		"description": notif.Description,
-		"link":        notif.Link,
-	})
-	if err != nil {
-		log.Panic("unable to jsonify notifiaction request in transmissionJSON")
-	}
-
-	return message
-}
-
-var notificationRequestSchema = z.Slice(z.Struct(z.Schema{
-	"user":        z.String().Required(z.Message("users array is required")).Min(1, z.Message("user cannot be empty")),
-	"title":       z.String().Required(z.Message("title is required")).Min(1, z.Message("title cannot be empty")),
-	"description": z.String().Required(z.Message("description is required")).Min(1, z.Message("description cannot be empty")),
-	"link":        z.String().Required(z.Message("link is required")).Min(1, z.Message("link cannot be empty")),
-}))
-
-var broadcastRequestSchema = z.Struct(z.Schema{
-	"title":       z.String().Required(z.Message("title is required")).Min(1, z.Message("title cannot be empty")),
-	"description": z.String().Required(z.Message("description is required")).Min(1, z.Message("description cannot be empty")),
-	"link":        z.String().Required(z.Message("link is required")).Min(1, z.Message("link cannot be empty")),
-})
-
-var pushSubscriptionSchema = z.Struct(z.Schema{
-	"endpoint": z.String().Required(z.Message("endpoint URL is required")),
-	"keys": z.Struct(z.Schema{
-		"auth":   z.String().Required(z.Message("auth key is required")),
-		"p256dh": z.String().Required(z.Message("p256dh key is required")),
-	}),
-})
-
-type WebsocketConnectionsManager struct {
-	authorConnMap map[string]net.Conn
-	mu            sync.Mutex
-}
-
-func NewWebsocketConnectionsManager() *WebsocketConnectionsManager {
-	return &WebsocketConnectionsManager{
-		authorConnMap: make(map[string]net.Conn),
-	}
-}
-
-func (manager *WebsocketConnectionsManager) Add(user string, conn net.Conn) {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
-	manager.authorConnMap[user] = conn
-}
-
-func (manager *WebsocketConnectionsManager) Get(user string) (net.Conn, bool) {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
-	conn, ok := manager.authorConnMap[user]
-	return conn, ok
-}
-
-func (manager *WebsocketConnectionsManager) Delete(user string) {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
-	delete(manager.authorConnMap, user)
-}
-
-func (manager *WebsocketConnectionsManager) All() []net.Conn {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
-	return slices.Collect(maps.Values(manager.authorConnMap))
-}
-
-func authorizeUserRequest(r *http.Request, w http.ResponseWriter) (string, error) {
-	sessionCookie, err := r.Cookie("session")
+func readRequestBody(r *http.Request, w http.ResponseWriter) ([]byte, error) {
+	reqBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("missing cookies"))
-		return "", err
+		w.Write([]byte(errNoRequestBody.Error()))
+		return nil, errNoRequestBody
 	}
 
-	success, token := checkAuth([]byte(sessionCookie.Value))
-	if !success {
-		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte("unauthenticated"))
-		return "", err
-	}
-
-	return token.Token, nil
+	return reqBody, nil
 }
 
-func authorizeAdminRequest(r *http.Request, w http.ResponseWriter) error {
-	auth := r.Header.Get("Authorization")
-	splittedAuth := strings.Split(auth, " ")
-	if len(splittedAuth) != 2 {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("missing authorization"))
-		return fmt.Errorf("missing auth")
+func getRequestBodyJSON(reqBody []byte, w http.ResponseWriter) (map[string]any, error) {
+	reqMap := map[string]any{}
+	err := json.Unmarshal(reqBody, &reqMap)
+	if err != nil {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		w.Write([]byte(errInvalidJSON.Error()))
+		return nil, errInvalidJSON
 	}
 
-	apiKey := splittedAuth[1]
-	if apiKey != API_KEY {
-		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte("invalid api key"))
-		return fmt.Errorf("invalid api key")
-	}
+	return reqMap, nil
+}
 
-	return nil
+func failedZogValidation(errors map[string][]zog.ZogError, w http.ResponseWriter) {
+	firstError := errors["$first"]
+	w.WriteHeader(http.StatusBadRequest)
+	w.Write([]byte(firstError[0].Message()))
 }
 
 func main() {
@@ -195,30 +99,20 @@ func main() {
 	})
 
 	router.HandleFunc("POST /push-subscription", func(w http.ResponseWriter, r *http.Request) {
-		reqBody, err := io.ReadAll(r.Body)
+		reqBody, err := readRequestBody(r, w)
 		if err != nil {
-			log.Println("unable to read request body:", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("missing request body"))
+			return
+		}
+
+		reqMap, err := getRequestBodyJSON(reqBody, w)
+		if err != nil {
 			return
 		}
 
 		subscription := webpush.Subscription{}
-		reqMap := map[string]any{}
-		err = json.Unmarshal(reqBody, &reqMap)
-		if err != nil {
-			log.Println("unable to unmarshal request body:", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("missing json in request body"))
-			return
-		}
-
 		errors := pushSubscriptionSchema.Parse(reqMap, &subscription)
 		if errors != nil {
-			log.Println("zog validation failed")
-			firstError := errors["$first"]
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(firstError[0].Message()))
+			failedZogValidation(errors, w)
 			return
 		}
 
@@ -243,30 +137,20 @@ func main() {
 			return
 		}
 
-		reqBody, err := io.ReadAll(r.Body)
+		reqBody, err := readRequestBody(r, w)
 		if err != nil {
-			log.Println("unable to read request body:", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("missing request body"))
+			return
+		}
+
+		reqMap, err := getRequestBodyJSON(reqBody, w)
+		if err != nil {
 			return
 		}
 
 		notifReqs := []NotificationRequest{}
-		reqMap := []map[string]any{}
-		err = json.Unmarshal(reqBody, &reqMap)
-		if err != nil {
-			log.Println("unable to unmarshal request body:", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("missing json in request body"))
-			return
-		}
-
 		errors := notificationRequestSchema.Parse(reqMap, &notifReqs)
 		if errors != nil {
-			log.Println("zog validation failed")
-			firstError := errors["$first"]
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(firstError[0].Message()))
+			failedZogValidation(errors, w)
 			return
 		}
 
@@ -310,30 +194,20 @@ func main() {
 			return
 		}
 
-		reqBody, err := io.ReadAll(r.Body)
+		reqBody, err := readRequestBody(r, w)
 		if err != nil {
-			log.Println("unable to read request body:", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("missing request body"))
+			return
+		}
+
+		reqMap, err := getRequestBodyJSON(reqBody, w)
+		if err != nil {
 			return
 		}
 
 		var broadcastRequest BroadcastRequest
-		reqMap := map[string]any{}
-		err = json.Unmarshal(reqBody, &reqMap)
-		if err != nil {
-			log.Println("unable to unmarshal request body:", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("missing json in request body"))
-			return
-		}
-
 		errors := broadcastRequestSchema.Parse(reqMap, &broadcastRequest)
 		if errors != nil {
-			log.Println("zog validation failed")
-			firstError := errors["$first"]
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(firstError[0].Message()))
+			failedZogValidation(errors, w)
 			return
 		}
 

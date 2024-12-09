@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 
@@ -153,4 +154,41 @@ func checkAuth(cookieValue []byte) (bool, SessionCookie) {
 	}
 
 	return true, dbToken
+}
+
+func authorizeUserRequest(r *http.Request, w http.ResponseWriter) (string, error) {
+	sessionCookie, err := r.Cookie("session")
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("missing cookies"))
+		return "", err
+	}
+
+	success, token := checkAuth([]byte(sessionCookie.Value))
+	if !success {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("unauthenticated"))
+		return "", err
+	}
+
+	return token.Token, nil
+}
+
+func authorizeAdminRequest(r *http.Request, w http.ResponseWriter) error {
+	auth := r.Header.Get("Authorization")
+	splittedAuth := strings.Split(auth, " ")
+	if len(splittedAuth) != 2 {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("missing authorization"))
+		return fmt.Errorf("missing auth")
+	}
+
+	apiKey := splittedAuth[1]
+	if apiKey != API_KEY {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("invalid api key"))
+		return fmt.Errorf("invalid api key")
+	}
+
+	return nil
 }
