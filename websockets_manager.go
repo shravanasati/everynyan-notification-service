@@ -46,3 +46,10 @@ func (manager *WebsocketConnectionsManager) All() []net.Conn {
 
 	return slices.Collect(maps.Values(manager.authorConnMap))
 }
+
+func (manager *WebsocketConnectionsManager) Count() int {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+
+	return len(manager.authorConnMap)
+}

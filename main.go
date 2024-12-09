@@ -98,6 +98,15 @@ func main() {
 		}()
 	})
 
+	router.HandleFunc("GET /connections", func(w http.ResponseWriter, r *http.Request) {
+		if err := authorizeAdminRequest(r, w); err != nil {
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("%v", connManager.Count())))
+	})
+
 	router.HandleFunc("POST /push-subscription", func(w http.ResponseWriter, r *http.Request) {
 		reqBody, err := readRequestBody(r, w)
 		if err != nil {
