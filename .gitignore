@@ -18,3 +18,4 @@ bin/
 .env
 serviceAccountKey.json
 everynyan-notification-service
+subscriptions.db
