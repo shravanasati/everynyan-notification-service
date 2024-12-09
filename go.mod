@@ -1,6 +1,6 @@
 module github.com/shravanasati/everynyan-notification-service
 
-go 1.22.9
+go 1.23.4
 
 require (
 	cloud.google.com/go/firestore v1.15.0

@@ -36,7 +36,11 @@ type PushNotificationEvent struct {
 }
 
 func sendPushNotification(notif PushNotificationEvent, subscription webpush.Subscription) {
-	resp, err := webpush.SendNotification(jsonify(notif), &subscription, &webpush.Options{
+	_sendPushNotificationBytes(jsonify(notif), subscription)
+}
+
+func _sendPushNotificationBytes(message []byte, subscription webpush.Subscription) {
+	resp, err := webpush.SendNotification(message, &subscription, &webpush.Options{
 		Subscriber: "dev.shravan@proton.me",
 		VAPIDPublicKey: vapidPublicKey,
 		VAPIDPrivateKey: vapidPrivateKey,
