@@ -97,7 +97,6 @@ func decrypt(encryptedText string) ([]byte, error) {
 
 type SessionCookie struct {
 	Token  string `json:"token"`
-	UserID string `json:"userID"`
 	Role   string `json:"role"`
 }
 
@@ -118,7 +117,6 @@ func getToken(token string) (SessionCookie, error) {
 	data := snap.Data()
 	return SessionCookie{
 		Token:  data["token"].(string),
-		UserID: data["userID"].(string),
 		Role:   data["role"].(string),
 	}, nil
 }
