@@ -53,3 +53,12 @@ func (manager *WebsocketConnectionsManager) Count() int {
 
 	return len(manager.authorConnMap)
 }
+
+func (manager *WebsocketConnectionsManager) Close() {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+
+	for conn := range maps.Values(manager.authorConnMap) {
+		conn.Close()
+	}
+}

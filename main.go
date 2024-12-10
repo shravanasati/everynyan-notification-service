@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/Oudwins/zog"
 	"github.com/SherClockHolmes/webpush-go"
@@ -50,8 +55,11 @@ func failedZogValidation(errors map[string][]zog.ZogError, w http.ResponseWriter
 func main() {
 	addr := "localhost:7924"
 	storage := NewStorage("./subscriptions.db", "subscriptions")
+	defer storage.db.Close()
+
 	router := http.NewServeMux()
 	connManager := NewWebsocketConnectionsManager()
+	defer connManager.Close()
 
 	router.HandleFunc("/subscribe", func(w http.ResponseWriter, r *http.Request) {
 		token, err := authorizeUserRequest(r, w)
@@ -260,10 +268,39 @@ func main() {
 		}()
 	})
 
-	log.Println("Ready to accept connections at", addr)
-	err := http.ListenAndServe(addr, router)
-	if err != nil {
-		log.Fatalf("unable to start a server: %v \n", err)
+	server := &http.Server{
+		Addr: addr,
+		Handler: router,
+		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
+	// initializing the server in a goroutine so that
+	// it wont block the graceful shutdown handling below
+	go func() {
+		log.Println("Ready to accept connections at", addr)
+		err := server.ListenAndServe()
+		if err != nil {
+			log.Fatalf("unable to start a server: %v \n", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server with
+	// a timeout of 5 seconds.
+	quit := make(chan os.Signal, 1)
+	// kill (no param) default send syscall.SIGTERM
+	// kill -2 is syscall.SIGINT
+	// kill -9 is syscall.SIGKILL but can't be caught, so don't need to add it
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+
+	// The context is used to inform the server it has 5 seconds to finish
+	// the request it is currently handling
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatal("Server forced to shutdown:", err)
+	}
 }
