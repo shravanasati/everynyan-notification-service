@@ -44,6 +44,7 @@ func _sendPushNotificationBytes(message []byte, subscription webpush.Subscriptio
 		Subscriber: "dev.shravan@proton.me",
 		VAPIDPublicKey: vapidPublicKey,
 		VAPIDPrivateKey: vapidPrivateKey,
+		Urgency: webpush.UrgencyNormal,
 	})
 
 	if err != nil {
