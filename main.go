@@ -279,7 +279,7 @@ func main() {
 	go func() {
 		log.Println("Ready to accept connections at", addr)
 		err := server.ListenAndServe()
-		if err != nil {
+		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("unable to start a server: %v \n", err)
 		}
 	}()
