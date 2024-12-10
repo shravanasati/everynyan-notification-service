@@ -120,10 +120,10 @@ func main() {
 				msg, op, err := wsutil.ReadClientData(conn)
 				var closedError wsutil.ClosedError
 				if errors.As(err, &closedError) {
-					fmt.Printf("%v broke connection \n", conn.RemoteAddr())
+					// fmt.Printf("%v broke connection \n", conn.RemoteAddr())
 					break
 				}
-				if err != nil {
+				if err != nil && err != io.EOF {
 					fmt.Println("error in reading client data:", err)
 					break
 				}
