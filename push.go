@@ -47,7 +47,7 @@ func _sendPushNotificationBytes(message []byte, subscription webpush.Subscriptio
 	})
 
 	if err != nil {
-		log.Println("unable to send notification")
+		log.Println("unable to send push notification", err)
 		return
 	}
 

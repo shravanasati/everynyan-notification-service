@@ -75,10 +75,8 @@ func main() {
 			return
 		}
 
-		fmt.Println("new connection: ", conn.RemoteAddr())
 		connManager.Add(token, conn)
-		wsutil.WriteServerText(conn, []byte("notification subscription successfull"))
-		// fmt.Println(authorConnMap)
+
 		go func() {
 			defer func(conn net.Conn, author string) {
 				conn.Close()
@@ -126,7 +124,7 @@ func main() {
 			return
 		}
 
-		subscription := webpush.Subscription{}
+		var subscription webpush.Subscription
 		errors := pushSubscriptionSchema.Parse(reqMap, &subscription)
 		if errors != nil {
 			failedZogValidation(errors, w)
@@ -269,8 +267,8 @@ func main() {
 	})
 
 	server := &http.Server{
-		Addr: addr,
-		Handler: router,
+		Addr:           addr,
+		Handler:        router,
 		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
@@ -293,7 +291,6 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutting down server...")
-
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling
