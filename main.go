@@ -34,7 +34,7 @@ func readRequestBody(r *http.Request, w http.ResponseWriter) ([]byte, error) {
 	return reqBody, nil
 }
 
-func getRequestBodyJSON[T any](reqBody []byte, initial T, w http.ResponseWriter) (T, error) {
+func getRequestBodyJSON[T any](reqBody []byte, w http.ResponseWriter) (T, error) {
 	// reqMap := map[string]any{}
 	var reqMap T
 	err := json.Unmarshal(reqBody, &reqMap)
@@ -158,8 +158,7 @@ func main() {
 			return
 		}
 
-		var reqMap map[string]any
-		reqMap, err = getRequestBodyJSON(reqBody, reqMap, w)
+		reqMap, err := getRequestBodyJSON[map[string]any](reqBody, w)
 		if err != nil {
 			return
 		}
@@ -199,8 +198,7 @@ func main() {
 			return
 		}
 
-		var reqMap []map[string]any
-		reqMap, err = getRequestBodyJSON(reqBody, reqMap, w)
+		reqMap, err := getRequestBodyJSON[[]map[string]any](reqBody, w)
 		if err != nil {
 			return
 		}
@@ -257,8 +255,7 @@ func main() {
 			return
 		}
 
-		var reqMap map[string]any
-		reqMap, err = getRequestBodyJSON(reqBody, reqMap, w)
+		reqMap, err := getRequestBodyJSON[map[string]any](reqBody, w)
 		if err != nil {
 			return
 		}
