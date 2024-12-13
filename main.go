@@ -34,13 +34,14 @@ func readRequestBody(r *http.Request, w http.ResponseWriter) ([]byte, error) {
 	return reqBody, nil
 }
 
-func getRequestBodyJSON(reqBody []byte, w http.ResponseWriter) (map[string]any, error) {
-	reqMap := map[string]any{}
+func getRequestBodyJSON[T any](reqBody []byte, initial T, w http.ResponseWriter) (T, error) {
+	// reqMap := map[string]any{}
+	var reqMap T
 	err := json.Unmarshal(reqBody, &reqMap)
 	if err != nil {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		w.Write([]byte(errInvalidJSON.Error()))
-		return nil, errInvalidJSON
+		return reqMap, errInvalidJSON
 	}
 
 	return reqMap, nil
@@ -157,7 +158,8 @@ func main() {
 			return
 		}
 
-		reqMap, err := getRequestBodyJSON(reqBody, w)
+		var reqMap map[string]any
+		reqMap, err = getRequestBodyJSON(reqBody, reqMap, w)
 		if err != nil {
 			return
 		}
@@ -197,7 +199,8 @@ func main() {
 			return
 		}
 
-		reqMap, err := getRequestBodyJSON(reqBody, w)
+		var reqMap []map[string]any
+		reqMap, err = getRequestBodyJSON(reqBody, reqMap, w)
 		if err != nil {
 			return
 		}
@@ -254,7 +257,8 @@ func main() {
 			return
 		}
 
-		reqMap, err := getRequestBodyJSON(reqBody, w)
+		var reqMap map[string]any
+		reqMap, err = getRequestBodyJSON(reqBody, reqMap, w)
 		if err != nil {
 			return
 		}
