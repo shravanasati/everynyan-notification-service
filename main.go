@@ -210,7 +210,6 @@ func main() {
 			return
 		}
 
-		log.Println("notification request accepted")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("notification request accepted"))
 
@@ -267,7 +266,6 @@ func main() {
 			return
 		}
 
-		log.Println("broadcast request accepted")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("notification request accepted"))
 
