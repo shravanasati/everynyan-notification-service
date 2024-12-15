@@ -76,7 +76,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		wrapped := &wrappedWriter{
 			ResponseWriter: w,
-			statusCode: http.StatusOK,
+			statusCode:     http.StatusOK,
 		}
 
 		next.ServeHTTP(wrapped, r)
@@ -85,6 +85,9 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		log.Printf("%v %v %v in %v\n", wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
 	})
 }
+
+var MSG_PING = "__ping__"
+var MSG_PONG = []byte("__pong__")
 
 func main() {
 	addr := "localhost:7924"
@@ -129,8 +132,8 @@ func main() {
 					break
 				}
 				// handle ping-pong
-				if string(msg) == "__ping__" {
-					wsutil.WriteServerMessage(conn, op, []byte("__pong__"))
+				if string(msg) == MSG_PING {
+					wsutil.WriteServerMessage(conn, op, MSG_PONG)
 				}
 				// fmt.Println(op, string(msg))
 				// wsutil.WriteServerMessage(conn, op, msg)
