@@ -27,12 +27,12 @@ func init() {
 }
 
 type PushNotificationEvent struct {
-	Body  string `json:"body,omitempty"`
-	Icon  string `json:"icon,omitempty"`
-	Image string `json:"image,omitempty"`
-	Badge string `json:"badge,omitempty"`
-	URL   string `json:"url,omitempty"`
-	Title string `json:"title,omitempty"`
+	Body  string `json:"body"`
+	Icon  string `json:"icon"`
+	Image string `json:"image"`
+	Badge string `json:"badge"`
+	URL   string `json:"url"`
+	Title string `json:"title"`
 }
 
 func sendPushNotification(notif PushNotificationEvent, subscription webpush.Subscription) {
@@ -40,6 +40,7 @@ func sendPushNotification(notif PushNotificationEvent, subscription webpush.Subs
 }
 
 func _sendPushNotificationBytes(message []byte, subscription webpush.Subscription) {
+	fmt.Println("sending this push notification:", string(message))
 	resp, err := webpush.SendNotification(message, &subscription, &webpush.Options{
 		Subscriber: "dev.shravan@proton.me",
 		VAPIDPublicKey: vapidPublicKey,
