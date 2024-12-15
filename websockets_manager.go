@@ -1,9 +1,9 @@
 package main
 
 import (
+	"iter"
 	"maps"
 	"net"
-	"slices"
 	"sync"
 )
 
@@ -40,11 +40,11 @@ func (manager *WebsocketConnectionsManager) Delete(user string) {
 	delete(manager.authorConnMap, user)
 }
 
-func (manager *WebsocketConnectionsManager) All() []net.Conn {
+func (manager *WebsocketConnectionsManager) All() iter.Seq[net.Conn] {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	return slices.Collect(maps.Values(manager.authorConnMap))
+	return (maps.Values(manager.authorConnMap))
 }
 
 func (manager *WebsocketConnectionsManager) Count() int {

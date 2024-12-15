@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"log"
 	"net"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/SherClockHolmes/webpush-go"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
+	"github.com/shravanasati/everynyan-notification-service/middleware"
 )
 
 var errNoRequestBody = errors.New("missing request body")
@@ -53,41 +55,47 @@ func failedZogValidation(errors map[string][]zog.ZogError, w http.ResponseWriter
 	w.Write([]byte(firstError[0].Message()))
 }
 
-type wrappedWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (w *wrappedWriter) WriteHeader(statusCode int) {
-	w.ResponseWriter.WriteHeader(statusCode)
-	w.statusCode = statusCode
-}
-
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/subscribe" {
-			// dont include this route in middleware
-			// because the wrapped one gives error
-			// given ResponseWriter is not a http.Hijacker
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		start := time.Now()
-		wrapped := &wrappedWriter{
-			ResponseWriter: w,
-			statusCode:     http.StatusOK,
-		}
-
-		next.ServeHTTP(wrapped, r)
-
-		// eg. 200 GET /path in 150ms
-		log.Printf("%v %v %v in %v\n", wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
-	})
-}
-
 var MSG_PING = "__ping__"
 var MSG_PONG = []byte("__pong__")
+
+func BroadcastNotification(broadcastRequest BroadcastRequest, wsConns iter.Seq[net.Conn], subscriptions iter.Seq[webpush.Subscription]) {
+	title := broadcastRequest.Title
+	description := broadcastRequest.Description
+	link := broadcastRequest.Link
+
+	go func() {
+		// websocket notifications
+		wsMessage := NotificationRequest{
+			Title:       title,
+			Description: description,
+			Link:        link,
+		}.TransmissionJSON()
+
+		for wsConn := range wsConns {
+			go func(c net.Conn) {
+				wsutil.WriteServerText(c, wsMessage)
+			}(wsConn)
+		}
+	}()
+
+	go func() {
+		// push notifications
+		pushMessage := jsonify(PushNotificationEvent{
+			Title: title,
+			Body:  description,
+			URL:   link,
+			Icon:  "/android-192x192.png",
+			Badge: "/logo.png",
+			Image: "/logo.png",
+		})
+
+		for sub := range subscriptions {
+			go _sendPushNotificationBytes(pushMessage, sub)
+		}
+	}()
+}
+
+// todo broadcast a notification per day - trending post
 
 func main() {
 	addr := "localhost:7924"
@@ -95,6 +103,8 @@ func main() {
 	defer storage.db.Close()
 
 	router := http.NewServeMux()
+	adminRouter := http.NewServeMux()
+
 	connManager := NewWebsocketConnectionsManager()
 	defer connManager.Close()
 
@@ -141,21 +151,12 @@ func main() {
 		}()
 	})
 
-	router.HandleFunc("GET /connections", func(w http.ResponseWriter, r *http.Request) {
-		if err := authorizeAdminRequest(r, w); err != nil {
-			return
-		}
-
+	adminRouter.HandleFunc("GET /connections", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(fmt.Sprintf("%v", connManager.Count())))
 	})
 
-	router.HandleFunc("POST /push-subscription", func(w http.ResponseWriter, r *http.Request) {
-		err := authorizeAdminRequest(r, w)
-		if err != nil {
-			return
-		}
-
+	adminRouter.HandleFunc("POST /push-subscription", func(w http.ResponseWriter, r *http.Request) {
 		reqBody, err := readRequestBody(r, w)
 		if err != nil {
 			return
@@ -191,11 +192,7 @@ func main() {
 		w.Write([]byte("subscription added"))
 	})
 
-	router.HandleFunc("POST /send", func(w http.ResponseWriter, r *http.Request) {
-		if err := authorizeAdminRequest(r, w); err != nil {
-			return
-		}
-
+	adminRouter.HandleFunc("POST /send", func(w http.ResponseWriter, r *http.Request) {
 		reqBody, err := readRequestBody(r, w)
 		if err != nil {
 			return
@@ -247,11 +244,7 @@ func main() {
 		}
 	})
 
-	router.HandleFunc("POST /broadcast", func(w http.ResponseWriter, r *http.Request) {
-		if err := authorizeAdminRequest(r, w); err != nil {
-			return
-		}
-
+	adminRouter.HandleFunc("POST /broadcast", func(w http.ResponseWriter, r *http.Request) {
 		reqBody, err := readRequestBody(r, w)
 		if err != nil {
 			return
@@ -272,45 +265,14 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("notification request accepted"))
 
-		title := broadcastRequest.Title
-		description := broadcastRequest.Description
-		link := broadcastRequest.Link
-
-		go func() {
-			// websocket notifications
-			wsMessage := NotificationRequest{
-				Title:       title,
-				Description: description,
-				Link:        link,
-			}.TransmissionJSON()
-
-			for _, wsConn := range connManager.All() {
-				go func(c net.Conn) {
-					wsutil.WriteServerText(c, wsMessage)
-				}(wsConn)
-			}
-		}()
-
-		go func() {
-			// push notifications
-			pushMessage := jsonify(PushNotificationEvent{
-				Title: title,
-				Body:  description,
-				URL:   link,
-				Icon:  "/android-192x192.png",
-				Badge: "/logo.png",
-				Image: "/logo.png",
-			})
-
-			for sub := range storage.GetAllSubscriptions() {
-				go _sendPushNotificationBytes(pushMessage, sub)
-			}
-		}()
+		BroadcastNotification(broadcastRequest, connManager.All(), storage.GetAllSubscriptions())
 	})
 
+	router.Handle("/", middleware.EnsureAdmin(adminRouter))
+	mwStack := middleware.CreateStack(middleware.Logging)
 	server := &http.Server{
 		Addr:           addr,
-		Handler:        loggingMiddleware(router),
+		Handler:        mwStack(router),
 		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
